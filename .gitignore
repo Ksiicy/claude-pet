@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 测试 / 截图脚本的临时输出（README 用图在 docs/ 里）
+/*.png
+/*.gif
+
+# 旧的逐帧动画：有视频动作后不再加载，体积大，不随仓库发布
+aoi_pet/assets/claude/clips/
+
+# 绿幕源视频：体积大，导入后的透明帧已在 aoi_pet/assets/claude/video/
+video_prompts/videos/
+*.mp4
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

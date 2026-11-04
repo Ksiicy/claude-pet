@@ -1,0 +1,3 @@
+# 只有导入绿幕视频（tools/import_videos.py）等素材工具需要；运行桌宠不需要
+-r requirements.txt
+opencv-python>=4.8
