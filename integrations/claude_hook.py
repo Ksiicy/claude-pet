@@ -55,9 +55,13 @@ def tool_failed(ev: dict) -> bool:
 def write_json(path: str, data) -> None:
     # 先写临时文件再替换，桌宠不会读到写了一半的 JSON（不用 tempfile：少导入一个模块，钩子启动更快）
     tmp = f"{path}.{os.getpid()}.tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False)
-    os.replace(tmp, path)
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, path)       # Windows 上桌宠正好在读时会失败：这次就不写了，下个事件再写
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def pet_alive(d: str) -> bool:

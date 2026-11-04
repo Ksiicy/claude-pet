@@ -105,6 +105,11 @@ VIDEO_WORK = {             # Claude 干活 → 视频候选（循环）
     "asking": ("v_asking", "v_wave"), "happy": ("v_happy", "v_wave"), "proud": ("v_happy", "v_wave"),
     "oops": ("v_oops", "v_thinking"),
 }
+# Claude 一直在干活（思考、查资料、写、跑命令……）时，这两段视频轮流演：每段完整播完一遍
+# （首尾都是标准站姿）再换另一段，衔接处没有接缝，也不会一直重复同一个动作
+WORK_ROTATION = ("v_thinking", "v_searching")
+WORK_MIN_CLIP = 4.0        # 一段工作视频开演后至少演这么久，再换别的工作视频（完成 / 出错 / 提问除外）
+WORK_URGENT = {"happy", "proud", "oops", "asking"}
 
 # 逐帧动画（assets/claude/clips，由 tools/import_clips.py 导入并配准）
 # 行为 → (动画 id, 播放方式)：once 播一遍停在最后一帧；loop 循环；sit 坐下-停住-站起；
@@ -262,6 +267,8 @@ class ClaudePainter:
         self._clip_pos: dict[str, tuple[float, bool]] = {}   # 动画 id → (小数帧位置, 是否循环)
         self._idle_since = 0.0
         self._work_clip_since = 0.0
+        self._work_clips = {c for cands in VIDEO_WORK.values() for c in cands
+                            if c not in ("v_wave", "v_happy", "v_oops", "v_asking")}
         self._mirror = False
         self._facing = 1                 # 画面上当前的朝向：1 正常，-1 镜像
         self._flip_p: float | None = None
@@ -506,6 +513,16 @@ class ClaudePainter:
         self._clip_pos[cid] = pos
         return f"clip:{cid}"
 
+    def _rotate_work(self, want: str, now: float) -> str:
+        """轮换中的那段没播完就继续播（工作状态在思考 / 查资料之间来回变也不打断）；播完一遍换另一段。"""
+        cur = self._mix[-1][0][5:] if self._mix[-1][0].startswith("clip:") else ""
+        if cur not in WORK_ROTATION:
+            return want
+        clip = self._clips[cur]
+        if now - self._work_clip_since < len(clip["frames"]) / clip["fps"]:
+            return cur
+        return WORK_ROTATION[(WORK_ROTATION.index(cur) + 1) % len(WORK_ROTATION)]
+
     def _video_key(self, brain: Brain) -> str:
         """视频模式：任何时候都返回一段视频，不再回到静态立绘。"""
         def play(cid: str, t: float, loop: bool) -> str:
@@ -551,6 +568,12 @@ class ClaudePainter:
         work = getattr(brain, "work_display", None)
         if work:
             cid = first(VIDEO_WORK.get(work, ()))
+            playing = self._mix[-1][0][5:] if self._mix[-1][0].startswith("clip:") else ""
+            if (cid and playing != cid and work not in WORK_URGENT and playing in self._work_clips
+                    and brain.t - self._work_clip_since < WORK_MIN_CLIP):
+                cid = playing                  # 刚开演的工作视频先演完 4 秒，Claude 换工具太快时不来回跳
+            elif cid in WORK_ROTATION and all(c in self._clips for c in WORK_ROTATION):
+                cid = self._rotate_work(cid, brain.t)
             if cid:
                 # 同一段视频从开始演的那一刻连续循环；不同工作状态映射到同一段视频时也不会重来
                 if self._mix[-1][0] != f"clip:{cid}":

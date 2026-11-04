@@ -127,6 +127,8 @@ export const register: Register = on => {
     const pose = e.reason === 'answer' ? (tools >= BIG_JOB_TOOLS ? 'proud' : 'happy') : e.reason === 'aborted' ? 'idle' : 'oops'
     tools = 0
     await setState($, pose, 'Stop')
+    // 每轮结束再取一次额度：用的是 Claude Code 手里已有的限额信息，不额外发请求
+    try { await writeQuota($, (await $.session.usage()).rateLimits) } catch {}
     return r
   })
 
